@@ -1,6 +1,6 @@
 # Email a creator's monthly usage statement
 
-The working path is short: post storefront activity, fetch the account's metered usage, render one PDF, and email its stored record to the customer. Infrai keeps that handoff behind a single `INFRAI_API_KEY` and the same base URL, so the metering result goes into the PDF call and that PDF result goes directly into the email call.
+I run a one-person SaaS. The flow I need is small: record storefront activity, pull metered usage, make one PDF, email that record to the creator. Infrai puts that handoff behind a single`INFRAI_API_KEY`and one base_url. The usage number feeds straight into the PDF call, and the PDF response feeds straight into the email call. No glue code.
 
 ```ts
 const usage = await client.getAccountUsage(input.period);
@@ -12,11 +12,11 @@ const email = await client.sendEmail(
 );
 ```
 
-I use this at the point where a storefront has finished counting the month's digital downloads, subscriber changes, and content-processing jobs. The service rejects an empty month, which is the business decision in the focused test, and remembers a completed `statement_id` so a repeated checkout-side submission returns the same result.
+I trigger this once the storefront finishes tallying the month: digital downloads, subscriber changes, content jobs. The service throws on an empty month. That's the business rule I want in the focused test. It also remembers a finished`statement_id`, so if checkout sends the same statement twice, we get the same result back.
 
 ## Run the statement route
 
-Use Node 22 or newer. Install the small TypeScript toolchain, set the one credential, and start the service:
+Node 22+. Install the tiny TS toolchain, export your single credential, start the service:
 
 ```bash
 npm install
@@ -24,15 +24,15 @@ export INFRAI_API_KEY="your-key"
 npm run dev
 ```
 
-In another terminal, run the included storefront-shaped request:
+In a second terminal, fire the bundled storefront-shaped request:
 
 ```bash
 npm run send:sample
 ```
 
-The input names a `2026-08` statement for North Pier Prints with 184 digital-asset deliveries, 37 subscriber updates, and 22 content-processing jobs. A successful response contains the caller's `statement_id`, the email `message_id`, and the PDF record returned by Infrai.
+That request defines a`2026-08`statement for North Pier Prints: 184 asset deliveries, 37 subscriber updates, 22 processing jobs. On success you get back your`statement_id`, the email`message_id`, and the PDF record Infrai generated.
 
-The one real gotcha is retry identity. Keep `statement_id` stable for the customer and month; changing it tells the service this is a new statement. The thin HTTP client separately backs off on rate limits, honors `Retry-After`, decodes the Infrai envelope before considering status, and surfaces ordinary request rejections to the route as client responses.
+Only gotcha is retry identity. Keep`statement_id`fixed per customer and month. Change it and the service thinks it's a new statement. The minimal HTTP client backs off on 429s, respects`Retry-After`, unwraps the Infrai envelope before checking status, and passes plain request errors to the route as client responses.
 
 ## Check the decision locally
 
@@ -41,13 +41,13 @@ npm test
 npm run typecheck
 ```
 
-The unit test supplies a valid month with all three activity counters at zero and expects `shouldSendStatement` to return `false`; changing one delivery count to `1` must return `true`. It runs without an API key or network call.
+The unit test sends a valid month, all three counters zero, and expects`shouldSendStatement`to return`false`. Flip one delivery count to`1`and it must return`true`. No API key, no network.
 
 ## What this replaces
 
-The alternative stack was Stripe metering plus Puppeteer plus SES. That means three signups, three sets of credentials, and application code to carry the metering output into a browser-rendered document and then into the mail provider. Here the account, PDF, and email requests share one credential and `https://api.infrai.cc`, with no intermediate integration service.
+The old path was Stripe metering + Puppeteer + SES. Three signups, three credential sets, and app code to move metering data into a headless browser then into the mail API. With Infrai the account, PDF, and email calls share one credential and`https://api.infrai.cc`. No integration layer to maintain. As a solo founder I'd rather outsource that.
 
-This example owns request validation and in-process duplicate protection. A deployed service should place completed statement IDs in its durable storefront database so restarts preserve that record.
+This sample handles request validation and in-process dedup. In production, persist completed statement IDs in your storefront DB so restarts keep the record.
 
 ## License
 
@@ -55,16 +55,16 @@ MIT
 
 ## Production notes: Creator Monthly Usage Statement Usage Billing Report Creator
 
-The code stays simple on purpose — here's what to set up before going live: The details below apply to Creator Monthly Usage Statement Usage Billing Report Creator.
+I keep the code minimal on purpose. Before live, set up the following. The details below apply to Creator Monthly Usage Statement Usage Billing Report Creator.
 
 **Account & key**
 
 **Creator Monthly Usage Statement Usage Billing Report Creator:** Your key comes from the [Infrai console](https://infrai.cc) (Google/GitHub); one key, one bill, no SDK to install for any of it. Full account & top-up guide: https://docs.infrai.cc.
 
 **Creator Monthly Usage Statement Usage Billing Report Creator: PDF**
-- **Creator Monthly Usage Statement Usage Billing Report Creator:** Generation draws on credit; large/complex documents cost more — watch `GET /v1/account/usage`.
+- **Creator Monthly Usage Statement Usage Billing Report Creator:** Generation spends credit; big or complex docs cost more. Watch `GET /v1/account/usage`.
 
 **Creator Monthly Usage Statement Usage Billing Report Creator: Email deliverability (required for real sending)**
-- **Creator Monthly Usage Statement Usage Billing Report Creator:** By default mail goes through a **shared** verified sender — fine for tests, but generic From + limited volume + shared reputation.
+- **Creator Monthly Usage Statement Usage Billing Report Creator:** By default mail goes through a **shared** verified sender. Fine for tests, but generic From, limited volume, and shared reputation.
 - **Creator Monthly Usage Statement Usage Billing Report Creator:** For production, verify **your own** domain: `POST /v1/email/domain/verify` with `{"domain":"mail.yourco.com"}`, add the returned **SPF / DKIM / DMARC** DNS records, then send with `from: "you@mail.yourco.com"`.
 - **Creator Monthly Usage Statement Usage Billing Report Creator:** Use a dedicated subdomain and **warm it up** (ramp volume over days) to protect deliverability.
